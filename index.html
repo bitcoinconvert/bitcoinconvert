@@ -1,0 +1,625 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>BitcoinConverter</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+  <script src="https://unpkg.com/@zxing/library@0.20.0/umd/index.min.js"></script>
+  <style>
+    #loading-spinner {
+      display: none;
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      z-index: 1000;
+    }
+    .spinner {
+      width: 40px;
+      height: 40px;
+      border: 4px solid #f3f3f3;
+      border-top: 4px solid #f97316;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+    .dark {
+      background-color: #1a202c;
+      color: #e2e8f0;
+    }
+    .light {
+      background-color: #f7fafc;
+      color: #1a202c;
+    }
+    .progress-bar {
+      width: 100%;
+      height: 20px;
+      background-color: #e2e8f0;
+      border-radius: 5px;
+      overflow: hidden;
+      margin-bottom: 1rem;
+    }
+    .progress-bar-fill {
+      height: 100%;
+      background-color: #f97316;
+      transition: width 0.2s ease-in-out;
+    }
+    .progress-text {
+      text-align: center;
+      font-size: 0.9rem;
+      color: #1a202c;
+    }
+    .dark .progress-text {
+      color: #e2e8f0;
+    }
+    .error-boundary {
+      padding: 20px;
+      text-align: center;
+      color: red;
+    }
+    .news-card {
+      transition: transform 0.2s;
+    }
+    .news-card:hover {
+      transform: translateY(-4px);
+    }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <div id="loading-spinner" class="spinner"></div>
+  <script type="text/babel">
+    const { useState, useEffect } = React;
+
+    // Error Boundary Component
+    class ErrorBoundary extends React.Component {
+      state = { hasError: false };
+
+      static getDerivedStateFromError(error) {
+        return { hasError: true };
+      }
+
+      componentDidCatch(error, errorInfo) {
+        console.error('ErrorBoundary caught an error:', error, errorInfo);
+      }
+
+      render() {
+        if (this.state.hasError) {
+          return (
+            <div className="error-boundary">
+              <h1>Something went wrong.</h1>
+              <p>Please refresh the page or try again later.</p>
+            </div>
+          );
+        }
+        return this.props.children;
+      }
+    }
+
+    const translations = {
+      en: {
+        title: "BitcoinConverter",
+        convertAddress: "Convert Crypto Address to Bitcoin",
+        uploadQR: "Upload QR Code To Bitcoin Address",
+        selectCrypto: "Select Cryptocurrency",
+        enterAddress: "Enter Crypto Address",
+        convertButton: "Convert to Bitcoin Address",
+        convertQRButton: "Convert To Bitcoin QR CODE Address",
+        uploadQRButton: "Upload QR CODE Address",
+        copyAddress: "Copy Address",
+        downloadQR: "Download QR Code",
+        selectLanguage: "Select Language",
+        invalidQR: "Please upload a valid QR code",
+        priceInfo: "Price Information",
+        footer: "© Bitcoin Converter",
+        noPriceData: "No price data available",
+        error: "An error occurred. Please try again.",
+        noFileSelected: "Please select a file",
+        invalidFileType: "Only JPG, PNG, GIF and WEBP files are supported",
+        fileTooLarge: "File size exceeds 5MB",
+        uploadSuccess: "Picture successfully uploaded 100%",
+      },
+      zh: {
+        title: "比特币转换器",
+        convertAddress: "将加密地址转换为比特币",
+        uploadQR: "上传二维码到比特币地址",
+        selectCrypto: "选择加密货币",
+        enterAddress: "输入加密地址",
+        convertButton: "转换为比特币地址",
+        convertQRButton: "转换为比特币二维码地址",
+        uploadQRButton: "上传二维码地址",
+        copyAddress: "复制地址",
+        downloadQR: "下载二维码",
+        selectLanguage: "选择语言",
+        invalidQR: "请上传有效的二维码",
+        priceInfo: "价格信息",
+        footer: "© 比特币转换器",
+        noPriceData: "没有可用的价格数据",
+        error: "发生错误，请重试。",
+        noFileSelected: "请选择一个文件",
+        invalidFileType: "仅支持JPG, PNG, GIF和WEBP文件",
+        fileTooLarge: "文件大小超过5MB",
+        uploadSuccess: "图片成功上传 100%",
+      },
+      hi: {
+        title: "बिटकॉइन कनवर्टर",
+        convertAddress: "क्रिप्टो पता को बिटकॉइन में बदलें",
+        uploadQR: "क्यूएआर कोड को बिटकॉइन पता में अपलोड करें",
+        selectCrypto: "क्रिप्टोकरेंसी चुनें",
+        enterAddress: "क्रिप्टो पता दर्ज करें",
+        convertButton: "बिटकॉइन पते में बदलें",
+        convertQRButton: "बिटकॉइन क्यूआर कोड पते में बदलें",
+        uploadQRButton: "क्यूआर कोड पता अपलोड करें",
+        copyAddress: "पता कॉपी करें",
+        downloadQR: "क्यूआर कोड डाउनलोड करें",
+        selectLanguage: "भाषा चुनें",
+        invalidQR: "कृपया एक वैध क्यूआर कोड अपलोड करें",
+        priceInfo: "मूल्य जानकारी",
+        footer: "© बिटकॉइन कनवर्टर",
+        noPriceData: "कोई मूल्य डेटा उपलब्ध नहीं है",
+        error: "एक त्रुटि हुई। कृपया पुनः प्रयास करें।",
+        noFileSelected: "कृपया एक फाइल चुनें",
+        invalidFileType: "केवल JPG, PNG, GIF और WEBP फाइलें समर्थित हैं",
+        fileTooLarge: "फाइल का आकार 5MB से अधिक है",
+        uploadSuccess: "चित्र सफलतापूर्वक अपलोड हुआ 100%",
+      },
+      es: {
+        title: "Convertidor de Bitcoin",
+        convertAddress: "Convertir dirección cripto a Bitcoin",
+        uploadQR: "Subir código QR a dirección de Bitcoin",
+        selectCrypto: "Seleccionar criptomoneda",
+        enterAddress: "Ingresar dirección cripto",
+        convertButton: "Convertir a dirección Bitcoin",
+        convertQRButton: "Convertir a dirección QR CODE Bitcoin",
+        uploadQRButton: "Subir dirección QR CODE",
+        copyAddress: "Copiar dirección",
+        downloadQR: "Descargar código QR",
+        selectLanguage: "Seleccionar idioma",
+        invalidQR: "Por favor, sube un código QR válido",
+        priceInfo: "Información de precios",
+        footer: "© Convertidor de Bitcoin",
+        noPriceData: "No hay datos de precios disponibles",
+        error: "Ocurrió un error. Por favor, intenta de nuevo.",
+        noFileSelected: "Por favor, selecciona un archivo",
+        invalidFileType: "Solo se admiten archivos JPG, PNG, GIF y WEBP",
+        fileTooLarge: "El tamaño del archivo excede 5MB",
+        uploadSuccess: "Imagen subida con éxito 100%",
+      },
+      fr: {
+        title: "Convertisseur Bitcoin",
+        convertAddress: "Convertir l'adresse crypto en Bitcoin",
+        uploadQR: "Télécharger le code QR vers l'adresse Bitcoin",
+        selectCrypto: "Sélectionner une cryptomonnaie",
+        enterAddress: "Entrer l'adresse crypto",
+        convertButton: "Convertir en adresse Bitcoin",
+        convertQRButton: "Convertir en adresse QR CODE Bitcoin",
+        uploadQRButton: "Télécharger l'adresse QR CODE",
+        copyAddress: "Copier l'adresse",
+        downloadQR: "Télécharger le code QR",
+        selectLanguage: "Sélectionner la langue",
+        invalidQR: "Veuillez télécharger un code QR valide",
+        priceInfo: "Informations sur les prix",
+        footer: "© Convertisseur Bitcoin",
+        noPriceData: "Aucune donnée de prix disponible",
+        error: "Une erreur s'est produite. Veuillez réessayer.",
+        noFileSelected: "Veuillez sélectionner un fichier",
+        invalidFileType: "Seuls les fichiers JPG, PNG, GIF et WEBP sont pris en charge",
+        fileTooLarge: "La taille du fichier dépasse 5MB",
+        uploadSuccess: "Image téléchargée avec succès 100%",
+      },
+    };
+
+    function App() {
+      const [theme, setTheme] = useState('dark');
+      const [language, setLanguage] = useState('en');
+      const [crypto, setCrypto] = useState('bitcoin');
+      const [address, setAddress] = useState('');
+      const [selectedFile, setSelectedFile] = useState(null);
+      const [qrCode, setQrCode] = useState('');
+      const [btcAddress, setBtcAddress] = useState('bc1qhpaw0y4296p9ua75e2df9h5pqaqyt6m5au7k0m');
+      const [priceInfo, setPriceInfo] = useState(null);
+      const [news, setNews] = useState([]);
+      const [loading, setLoading] = useState(false);
+      const [error, setError] = useState('');
+      const [uploadProgress, setUploadProgress] = useState(0);
+      const [uploadComplete, setUploadComplete] = useState(false);
+      const [showConvertButton, setShowConvertButton] = useState(false);
+
+      const blockCypherToken = "528ce0ddeb354729943aa9a03cea24fd";
+      const cryptoList = [
+        'bitcoin', 'ethereum', 'cardano', 'binancecoin', 'dogecoin',
+        'solana', 'polkadot', 'uniswap', 'litecoin', 'chainlink',
+        'stellar', 'vechain', 'tron', 'monero', 'filecoin'
+      ];
+
+      useEffect(() => {
+        const generateNewAddress = async () => {
+          setLoading(true);
+          try {
+            const response = await axios.post(
+              `https://api.blockcypher.com/v1/btc/main/addrs?token=${blockCypherToken}`
+            );
+            setBtcAddress(response.data.address);
+            setTimeout(generateNewAddress, 10 * 60 * 1000); // 10 minutes
+            setTimeout(() => setBtcAddress(''), 8 * 60 * 60 * 1000); // 8 hours expiry
+          } catch (err) {
+            console.error('Error generating new address:', err);
+            setError(translations[language].error);
+          } finally {
+            setLoading(false);
+          }
+        };
+        generateNewAddress();
+      }, [language]);
+
+      useEffect(() => {
+        const fetchNews = async () => {
+          try {
+            const response = await axios.get('https://min-api.cryptocompare.com/data/v2/news/?lang=EN');
+            setNews(response.data.Data.slice(0, 8));
+          } catch (err) {
+            console.error('Error fetching news:', err);
+          }
+        };
+        fetchNews();
+      }, []);
+
+      const fetchPriceInfo = async (selectedCrypto) => {
+        setLoading(true);
+        try {
+          const response = await axios.get(
+            'https://api.coingecko.com/api/v3/simple/price',
+            {
+              params: {
+                ids: selectedCrypto,
+                vs_currencies: 'btc,usd',
+                include_market_cap: true,
+                include_24hr_vol: true,
+                include_24hr_change: true,
+              },
+            }
+          );
+          setPriceInfo(response.data[selectedCrypto]);
+        } catch (err) {
+          console.error('Error fetching price:', err);
+          setPriceInfo(null);
+          setError(translations[language].noPriceData);
+        } finally {
+          setLoading(false);
+        }
+      };
+
+      const handleConvertAddress = async () => {
+        setLoading(true);
+        setError('');
+        try {
+          const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${btcAddress}`;
+          setQrCode(qrCodeUrl);
+          if (crypto !== 'bitcoin') {
+            await fetchPriceInfo(crypto);
+          }
+        } catch (err) {
+          setError(translations[language].error);
+        } finally {
+          setLoading(false);
+        }
+      };
+
+      const handleConvertQRCode = async () => {
+        setLoading(true);
+        setError('');
+        try {
+          const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${btcAddress}`;
+          setQrCode(qrCodeUrl);
+          setBtcAddress(''); // Hide the address when generating QR code only
+        } catch (err) {
+          setError(translations[language].error);
+        } finally {
+          setLoading(false);
+        }
+      };
+
+      const handleFileUpload = async (file) => {
+        if (!file) {
+          setError(translations[language].noFileSelected);
+          return;
+        }
+        if (!['image/jpeg', 'image/png', 'image/gif', 'image/webp'].includes(file.type)) {
+          setError(translations[language].invalidFileType);
+          return;
+        }
+        if (file.size > 5 * 1024 * 1024) {
+          setError(translations[language].fileTooLarge);
+          return;
+        }
+        setLoading(true);
+        setError('');
+        setUploadProgress(0);
+        setUploadComplete(false);
+        setShowConvertButton(false);
+
+        try {
+          // Start simulated progress
+          let progress = 0;
+          const interval = setInterval(() => {
+            progress = Math.min(progress + 10, 90);
+            setUploadProgress(progress);
+          }, 100);
+
+          const reader = new FileReader();
+          reader.onload = async (event) => {
+            clearInterval(interval);
+            setUploadProgress(100);
+            setUploadComplete(true);
+            setShowConvertButton(true);
+
+            const img = new Image();
+            img.src = event.target.result;
+            img.onload = async () => {
+              const codeReader = new ZXing.BrowserQRCodeReader();
+              try {
+                const result = await codeReader.decodeFromImage(img);
+                console.log('QR code decoded:', result.text);
+                // If we get here, it's a valid QR code
+              } catch (err) {
+                console.error('Error decoding QR code:', err);
+                // Only show error if it's specifically a QR code decoding error
+                if (err.message.includes("No QR code found") || err.message.includes("Could not find QRCode")) {
+                  setError(translations[language].invalidQR);
+                } else {
+                  setError(translations[language].error);
+                }
+              } finally {
+                setLoading(false);
+              }
+            };
+            img.onerror = () => {
+              clearInterval(interval);
+              setError(translations[language].invalidQR);
+              setLoading(false);
+            };
+          };
+          reader.onerror = () => {
+            clearInterval(interval);
+            setError(translations[language].invalidQR);
+            setLoading(false);
+          };
+          reader.readAsDataURL(file);
+        } catch (err) {
+          console.error('Error in file upload:', err);
+          setError(translations[language].invalidQR);
+          setLoading(false);
+        }
+      };
+
+      const copyToClipboard = () => {
+        navigator.clipboard.writeText(btcAddress);
+        alert('Address copied to clipboard!');
+      };
+
+      const downloadQRCode = () => {
+        const link = document.createElement('a');
+        link.href = qrCode;
+        link.download = 'bitcoin_qr_code.png';
+        link.click();
+      };
+
+      const toggleTheme = () => {
+        setTheme(theme === 'dark' ? 'light' : 'dark');
+      };
+
+      useEffect(() => {
+        const spinner = document.getElementById('loading-spinner');
+        if (loading) {
+          spinner.style.display = 'block';
+        } else {
+          spinner.style.display = 'none';
+        }
+      }, [loading]);
+
+      return (
+        <div className={`min-h-screen ${theme} flex flex-col`}>
+          <header className="p-4 flex justify-between items-center">
+            <h1 className="text-2xl font-bold">{translations[language].title}</h1>
+            <div className="flex items-center space-x-4">
+              <select
+                value={language}
+                onChange={(e) => setLanguage(e.target.value)}
+                className="p-2 rounded bg-gray-200 dark:bg-gray-700"
+              >
+                <option value="en">English</option>
+                <option value="zh">Mandarin Chinese</option>
+                <option value="hi">Hindi</option>
+                <option value="es">Spanish</option>
+                <option value="fr">French</option>
+              </select>
+              <button
+                onClick={toggleTheme}
+                className="p-2 rounded bg-orange-500 text-white hover:bg-orange-600"
+              >
+                {theme === 'dark' ? 'Light Mode' : 'Dark Mode'}
+              </button>
+            </div>
+          </header>
+          <main className="flex-grow p-4 flex flex-col items-center">
+            <div className="w-full max-w-md bg-gray-100 dark:bg-gray-800 p-6 rounded-lg shadow-lg">
+              <h2 className="text-xl font-semibold mb-4">{translations[language].convertAddress}</h2>
+              <select
+                value={crypto}
+                onChange={(e) => setCrypto(e.target.value)}
+                className="w-full p-2 mb-4 rounded bg-gray-200 dark:bg-gray-700"
+              >
+                {cryptoList.map((coin) => (
+                  <option key={coin} value={coin}>
+                    {coin.charAt(0).toUpperCase() + coin.slice(1)}
+                  </option>
+                ))}
+              </select>
+              <input
+                type="text"
+                value={address}
+                onChange={(e) => setAddress(e.target.value)}
+                placeholder={translations[language].enterAddress}
+                className="w-full p-2 mb-4 rounded bg-gray-200 dark:bg-gray-700"
+              />
+              <button
+                onClick={handleConvertAddress}
+                className="w-full p-2 bg-orange-500 text-white rounded hover:bg-orange-600 mb-2"
+              >
+                {translations[language].convertButton}
+              </button>
+              <button
+                onClick={handleConvertQRCode}
+                className="w-full p-2 bg-orange-600 text-white rounded hover:bg-orange-700"
+              >
+                {translations[language].convertQRButton}
+              </button>
+            </div>
+            <div className="w-full max-w-md bg-gray-100 dark:bg-gray-800 p-6 rounded-lg shadow-lg mt-6">
+              <h2 className="text-xl font-semibold mb-4">{translations[language].uploadQR}</h2>
+              <input
+                type="file"
+                accept="image/jpeg, image/png, image/gif, image/webp"
+                onChange={(e) => {
+                  setSelectedFile(e.target.files[0]);
+                  setUploadComplete(false);
+                  setShowConvertButton(false);
+                }}
+                className="w-full p-2 mb-4 rounded bg-gray-200 dark:bg-gray-700"
+              />
+              {selectedFile && (
+                <div>
+                  <div className="progress-bar">
+                    <div
+                      className="progress-bar-fill"
+                      style={{ width: `${uploadProgress}%` }}
+                    ></div>
+                  </div>
+                  <p className="progress-text">
+                    {uploadComplete
+                      ? translations[language].uploadSuccess
+                      : `Uploading: ${uploadProgress}%`}
+                  </p>
+                </div>
+              )}
+              {!uploadComplete && selectedFile && (
+                <button
+                  onClick={() => handleFileUpload(selectedFile)}
+                  className="w-full p-2 bg-orange-500 text-white rounded hover:bg-orange-600"
+                >
+                  {translations[language].uploadQRButton}
+                </button>
+              )}
+              {showConvertButton && (
+                <button
+                  onClick={handleConvertAddress}
+                  className="w-full p-2 bg-orange-600 text-white rounded hover:bg-orange-700 mt-2"
+                >
+                  {translations[language].convertButton}
+                </button>
+              )}
+            </div>
+            {error && (
+              <div className="w-full max-w-md mt-4 p-4 bg-red-100 dark:bg-red-900 text-red-700 dark:text-red-200 rounded">
+                {error}
+              </div>
+            )}
+            {qrCode && (
+              <div className="w-full max-w-md mt-6 bg-gray-100 dark:bg-gray-800 p-6 rounded-lg shadow-lg">
+                <h2 className="text-xl font-semibold mb-4">Bitcoin Address</h2>
+                {btcAddress && <p className="break-all mb-4">{btcAddress}</p>}
+                <img src={qrCode} alt="Bitcoin QR Code" className="mx-auto mb-4" />
+                <div className="flex space-x-4">
+                  {btcAddress && (
+                    <button
+                      onClick={copyToClipboard}
+                      className="flex-1 p-2 bg-orange-500 text-white rounded hover:bg-orange-600"
+                    >
+                      {translations[language].copyAddress}
+                    </button>
+                  )}
+                  <button
+                    onClick={downloadQRCode}
+                    className="flex-1 p-2 bg-orange-500 text-white rounded hover:bg-orange-600"
+                  >
+                    {translations[language].downloadQR}
+                  </button>
+                </div>
+              </div>
+            )}
+            {priceInfo && (
+              <div className="w-full max-w-md mt-6 bg-gray-100 dark:bg-gray-800 p-6 rounded-lg shadow-lg">
+                <h2 className="text-xl font-semibold mb-4">{translations[language].priceInfo}</h2>
+                {priceInfo.btc ? (
+                  <>
+                    <p>Price (BTC): {priceInfo.btc}</p>
+                    <p>Price (USD): {priceInfo.usd}</p>
+                    <p>Market Cap (USD): {priceInfo.usd_market_cap}</p>
+                    <p>24h Volume (USD): {priceInfo.usd_24h_vol}</p>
+                    <p>24h Change (%): {priceInfo.usd_24h_change.toFixed(2)}</p>
+                  </>
+                ) : (
+                  <p>{translations[language].noPriceData}</p>
+                )}
+              </div>
+            )}
+            {news.length > 0 && (
+              <div className="w-full max-w-4xl mt-6 p-6 bg-gray-100 dark:bg-gray-800 rounded-lg shadow-lg">
+                <h2 className="text-2xl font-bold mb-6 text-center">Trending Crypto News</h2>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {news.map((article, index) => (
+                    <div
+                      key={index}
+                      className="news-card bg-white dark:bg-gray-700 p-4 rounded-lg shadow-md hover:shadow-lg"
+                    >
+                      {article.imageurl && (
+                        <img
+                          src={article.imageurl}
+                          alt={article.title}
+                          className="w-full h-48 object-cover rounded-md mb-4"
+                          onError={(e) => (e.target.src = 'https://via.placeholder.com/200')}
+                        />
+                      )}
+                      <h3 className="text-xl font-semibold mb-2">{article.title}</h3>
+                      <p className="text-base text-gray-600 dark:text-gray-300 mb-4 line-clamp-3">
+                        {article.body}
+                      </p>
+                      <a
+                        href={article.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-orange-500 font-medium hover:underline"
+                      >
+                        Read more
+                      </a>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </main>
+          <footer className="p-4 text-center">
+            <p>{translations[language].footer}</p>
+          </footer>
+        </div>
+      );
+    }
+
+    // Use createRoot for React 18
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(
+      <ErrorBoundary>
+        <App />
+      </ErrorBoundary>
+    );
+  </script>
+</body>
+</html>
