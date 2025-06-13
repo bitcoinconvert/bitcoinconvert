@@ -7,13 +7,12 @@ dotenv.config();
 
 const app = express();
 const port = process.env.PORT || 3000;
-const API_TOKEN = process.env.API_TOKEN; // Token from .env file
 
 // Middleware
 app.use(cors({ origin: 'https://bitcoinconvert.github.io/bitcoinconvert/' }));
 app.use(express.json());
 
-// Generate HD Address (No authentication required for simplicity)
+// Generate HD Address
 app.post('/api/blockcypher/address', async (req, res) => {
   try {
     const response = await axios.post(
@@ -24,11 +23,11 @@ app.post('/api/blockcypher/address', async (req, res) => {
     res.json({ address: response.data.address });
   } catch (error) {
     console.error('Error generating address:', error.message);
-    res.status(500).json({ error: 'Failed to generate address' });
+    res.status(500).json({ error: 'Failed to generate address', details: error.message });
   }
 });
 
-// Check Balance (No authentication required for simplicity)
+// Check Balance
 app.get('/api/blockcypher/balance/:address', async (req, res) => {
   try {
     const response = await axios.get(
@@ -43,11 +42,11 @@ app.get('/api/blockcypher/balance/:address', async (req, res) => {
     });
   } catch (error) {
     console.error('Error fetching balance:', error.message);
-    res.status(500).json({ error: 'Failed to fetch balance' });
+    res.status(500).json({ error: 'Failed to fetch balance', details: error.message });
   }
 });
 
-// Send BTC (Kept as is, with placeholder)
+// Send BTC (kept as is with placeholder)
 app.post('/api/blockcypher/send', async (req, res) => {
   const { to_address, amount, private_key, from_address } = req.body;
   try {
@@ -75,7 +74,7 @@ app.post('/api/blockcypher/send', async (req, res) => {
     res.json({ tx: finalResponse.data });
   } catch (error) {
     console.error('Error sending BTC:', error.message);
-    res.status(500).json({ error: 'Failed to send BTC' });
+    res.status(500).json({ error: 'Failed to send BTC', details: error.message });
   }
 });
 
