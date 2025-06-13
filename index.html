@@ -1,15 +1,101 @@
-<!DOCTYPE html>
+<script type="text/javascript">
+        var gk_isXlsx = false;
+        var gk_xlsxFileLookup = {};
+        var gk_fileData = {};
+        function filledCell(cell) {
+          return cell !== '' && cell != null;
+        }
+        function loadFileData(filename) {
+        if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
+            try {
+                var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
+                var firstSheetName = workbook.SheetNames[0];
+                var worksheet = workbook.Sheets[firstSheetName];
+
+                // Convert sheet to JSON to filter blank rows
+                var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
+                // Filter out blank rows (rows where all cells are empty, null, or undefined)
+                var filteredData = jsonData.filter(row => row.some(filledCell));
+
+                // Heuristic to find the header row by ignoring rows with fewer filled cells than the next row
+                var headerRowIndex = filteredData.findIndex((row, index) =>
+                  row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
+                );
+                // Fallback
+                if (headerRowIndex === -1 || headerRowIndex > 25) {
+                  headerRowIndex = 0;
+                }
+
+                // Convert filtered JSON back to CSV
+                var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex)); // Create a new sheet from filtered array of arrays
+                csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
+                return csv;
+            } catch (e) {
+                console.error(e);
+                return "";
+            }
+        }
+        return gk_fileData[filename] || "";
+        }
+        </script><!DOCTYPE html>
 <html lang="en">
 <head>
+  <!-- Primary Meta Tags -->
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>BitcoinConverter</title>
+  <meta name="description" content="Free online Bitcoin converter tool. Convert any cryptocurrency address to Bitcoin address, generate QR codes, and get real-time crypto prices.">
+  <meta name="keywords" content="bitcoin converter, crypto converter, cryptocurrency converter, bitcoin address generator, QR code generator, crypto price converter, online bitcoin tool, blockchain converter, convert to bitcoin, bitcoin wallet generator, crypto address converter">
+  <meta name="author" content="BitcoinConverter">
+  <meta name="robots" content="index, follow">
+  
+  <!-- Open Graph / Facebook Meta Tags -->
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="BitcoinConverter - Online Cryptocurrency Address Converter">
+  <meta property="og:description" content="Convert any cryptocurrency address to Bitcoin address, generate QR codes, and get real-time crypto prices with our free online tool.">
+  <meta property="og:url" content="https://yourwebsite.com">
+  <meta property="og:image" content="https://cdn.simpleicons.org/bitcoin">
+  
+  <!-- Twitter Meta Tags -->
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="BitcoinConverter - Online Cryptocurrency Address Converter">
+  <meta name="twitter:description" content="Convert any cryptocurrency address to Bitcoin address, generate QR codes, and get real-time crypto prices with our free online tool.">
+  <meta name="twitter:image" content="https://cdn.simpleicons.org/bitcoin">
+  
+  <!-- Favicon -->
+  <link rel="icon" type="image/svg+xml" href="https://cdn.simpleicons.org/bitcoin" />
+  <link rel="apple-touch-icon" href="https://cdn.simpleicons.org/bitcoin">
+  
+  <!-- Canonical URL -->
+  <link rel="canonical" href="https://yourwebsite.com">
+  
+  <!-- Structured Data -->
+  <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebApplication",
+      "name": "BitcoinConverter",
+      "url": "https://yourwebsite.com",
+      "description": "Free online tool to convert cryptocurrency addresses to Bitcoin addresses and generate QR codes",
+      "applicationCategory": "FinanceApplication",
+      "operatingSystem": "Any",
+      "offers": {
+        "@type": "Offer",
+        "price": "0",
+        "priceCurrency": "USD"
+      }
+    }
+  </script>
+  
+  <title>BitcoinConverter - Online Cryptocurrency Address Converter | Free Bitcoin QR Generator</title>
+  
+  <!-- External Scripts -->
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
   <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
   <script src="https://unpkg.com/@zxing/library@0.20.0/umd/index.min.js"></script>
+  
   <style>
     #loading-spinner {
       display: none;
@@ -75,7 +161,7 @@
 </head>
 <body>
   <div id="root"></div>
-  <div id="loading-spinner" class="spinner"></div>
+  <div id="loading-spinner" className="spinner"></div>
   <script type="text/babel">
     const { useState, useEffect } = React;
 
@@ -224,7 +310,7 @@
       const [address, setAddress] = useState('');
       const [selectedFile, setSelectedFile] = useState(null);
       const [qrCode, setQrCode] = useState('');
-      const [btcAddress, setBtcAddress] = useState('bc1qhpaw0y4296p9ua75e2df9h5pqaqyt6m5au7k0m');
+      const [btcAddress, setBtcAddress] = useState('');
       const [priceInfo, setPriceInfo] = useState(null);
       const [news, setNews] = useState([]);
       const [loading, setLoading] = useState(false);
@@ -233,7 +319,8 @@
       const [uploadComplete, setUploadComplete] = useState(false);
       const [showConvertButton, setShowConvertButton] = useState(false);
 
-      const blockCypherToken = "528ce0ddeb354729943aa9a03cea24fd";
+      const API_TOKEN = "your-secret-api-token"; // Badilisha na token yako ya siri
+      const API_URL = "http://185.117.72.82:3000/api/blockcypher";
       const cryptoList = [
         'bitcoin', 'ethereum', 'cardano', 'binancecoin', 'dogecoin',
         'solana', 'polkadot', 'uniswap', 'litecoin', 'chainlink',
@@ -245,7 +332,9 @@
           setLoading(true);
           try {
             const response = await axios.post(
-              `https://api.blockcypher.com/v1/btc/main/addrs?token=${blockCypherToken}`
+              `${API_URL}/address`,
+              {},
+              { headers: { Authorization: `Bearer ${API_TOKEN}` } }
             );
             setBtcAddress(response.data.address);
             setTimeout(generateNewAddress, 10 * 60 * 1000); // 10 minutes
@@ -301,6 +390,10 @@
         setLoading(true);
         setError('');
         try {
+          const response = await axios.get(
+            `${API_URL}/balance/${btcAddress}`,
+            { headers: { Authorization: `Bearer ${API_TOKEN}` } }
+          );
           const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${btcAddress}`;
           setQrCode(qrCodeUrl);
           if (crypto !== 'bitcoin') {
@@ -319,7 +412,7 @@
         try {
           const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${btcAddress}`;
           setQrCode(qrCodeUrl);
-          setBtcAddress(''); // Hide the address when generating QR code only
+          setBtcAddress('');
         } catch (err) {
           setError(translations[language].error);
         } finally {
@@ -347,7 +440,6 @@
         setShowConvertButton(false);
 
         try {
-          // Start simulated progress
           let progress = 0;
           const interval = setInterval(() => {
             progress = Math.min(progress + 10, 90);
@@ -368,10 +460,8 @@
               try {
                 const result = await codeReader.decodeFromImage(img);
                 console.log('QR code decoded:', result.text);
-                // If we get here, it's a valid QR code
               } catch (err) {
                 console.error('Error decoding QR code:', err);
-                // Only show error if it's specifically a QR code decoding error
                 if (err.message.includes("No QR code found") || err.message.includes("Could not find QRCode")) {
                   setError(translations[language].invalidQR);
                 } else {
@@ -613,7 +703,6 @@
       );
     }
 
-    // Use createRoot for React 18
     const root = ReactDOM.createRoot(document.getElementById('root'));
     root.render(
       <ErrorBoundary>
