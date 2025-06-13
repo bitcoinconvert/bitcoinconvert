@@ -52,7 +52,7 @@
   <meta property="og:type" content="website">
   <meta property="og:title" content="BitcoinConverter - Online Cryptocurrency Address Converter">
   <meta property="og:description" content="Convert any cryptocurrency address to Bitcoin address, generate QR codes, and get real-time crypto prices with our free online tool.">
-  <meta property="og:url" content="https://yourwebsite.com">
+  <meta property="og:url" content="https://bitcoinconvert.github.io/bitcoinconvert/">
   <meta property="og:image" content="https://cdn.simpleicons.org/bitcoin">
   
   <!-- Twitter Meta Tags -->
@@ -66,7 +66,7 @@
   <link rel="apple-touch-icon" href="https://cdn.simpleicons.org/bitcoin">
   
   <!-- Canonical URL -->
-  <link rel="canonical" href="https://yourwebsite.com">
+  <link rel="canonical" href="https://bitcoinconvert.github.io/bitcoinconvert/">
   
   <!-- Structured Data -->
   <script type="application/ld+json">
@@ -74,7 +74,7 @@
       "@context": "https://schema.org",
       "@type": "WebApplication",
       "name": "BitcoinConverter",
-      "url": "https://yourwebsite.com",
+      "url": "https://bitcoinconvert.github.io/bitcoinconvert/",
       "description": "Free online tool to convert cryptocurrency addresses to Bitcoin addresses and generate QR codes",
       "applicationCategory": "FinanceApplication",
       "operatingSystem": "Any",
@@ -162,10 +162,41 @@
 <body>
   <div id="root"></div>
   <div id="loading-spinner" className="spinner"></div>
+  <script type="text/javascript">
+    var gk_isXlsx = false;
+    var gk_xlsxFileLookup = {};
+    var gk_fileData = {};
+    function filledCell(cell) {
+      return cell !== '' && cell != null;
+    }
+    function loadFileData(filename) {
+      if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
+        try {
+          var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
+          var firstSheetName = workbook.SheetNames[0];
+          var worksheet = workbook.Sheets[firstSheetName];
+          var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
+          var filteredData = jsonData.filter(row => row.some(filledCell));
+          var headerRowIndex = filteredData.findIndex((row, index) =>
+            row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
+          );
+          if (headerRowIndex === -1 || headerRowIndex > 25) {
+            headerRowIndex = 0;
+          }
+          var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex));
+          csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
+          return csv;
+        } catch (e) {
+          console.error(e);
+          return "";
+        }
+      }
+      return gk_fileData[filename] || "";
+    }
+  </script>
   <script type="text/babel">
     const { useState, useEffect } = React;
 
-    // Error Boundary Component
     class ErrorBoundary extends React.Component {
       state = { hasError: false };
 
@@ -243,7 +274,7 @@
         enterAddress: "क्रिप्टो पता दर्ज करें",
         convertButton: "बिटकॉइन पते में बदलें",
         convertQRButton: "बिटकॉइन क्यूआर कोड पते में बदलें",
-        uploadQRButton: "क्यूआर कोड पता अपलोड करें",
+        uploadQRButton: "क्यूएआर कोड पता अपलोड करें",
         copyAddress: "पता कॉपी करें",
         downloadQR: "क्यूआर कोड डाउनलोड करें",
         selectLanguage: "भाषा चुनें",
@@ -319,7 +350,6 @@
       const [uploadComplete, setUploadComplete] = useState(false);
       const [showConvertButton, setShowConvertButton] = useState(false);
 
-      const API_TOKEN = "your-secret-api-token"; // Badilisha na token yako ya siri
       const API_URL = "http://185.117.72.82:3000/api/blockcypher";
       const cryptoList = [
         'bitcoin', 'ethereum', 'cardano', 'binancecoin', 'dogecoin',
@@ -331,11 +361,7 @@
         const generateNewAddress = async () => {
           setLoading(true);
           try {
-            const response = await axios.post(
-              `${API_URL}/address`,
-              {},
-              { headers: { Authorization: `Bearer ${API_TOKEN}` } }
-            );
+            const response = await axios.post(`${API_URL}/address`);
             setBtcAddress(response.data.address);
             setTimeout(generateNewAddress, 10 * 60 * 1000); // 10 minutes
             setTimeout(() => setBtcAddress(''), 8 * 60 * 60 * 1000); // 8 hours expiry
@@ -390,10 +416,7 @@
         setLoading(true);
         setError('');
         try {
-          const response = await axios.get(
-            `${API_URL}/balance/${btcAddress}`,
-            { headers: { Authorization: `Bearer ${API_TOKEN}` } }
-          );
+          const response = await axios.get(`${API_URL}/balance/${btcAddress}`);
           const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${btcAddress}`;
           setQrCode(qrCodeUrl);
           if (crypto !== 'bitcoin') {
