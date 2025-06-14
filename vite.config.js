@@ -1,8 +1,8 @@
-import { defineConfig } from 'vite';
-import react from '@vitejs/plugin-react';
+import { defineConfig } from 'vite'
+import react from '@vitejs/plugin-react'
 
 export default defineConfig({
-  base: '/bitcoinconvert/',
+  base: '/bitcoinconvert/',  // Hii ni repo yako, badilisha kama jina ni tofauti
   plugins: [react()],
   server: {
     proxy: {
@@ -13,4 +13,4 @@ export default defineConfig({
       },
     },
   },
-});
+})
